@@ -1,9 +1,5 @@
-const util = require("util");
-const db = require("../../config/db"); // { conn, exe }
+const db = require("../../config/db"); // { sequelize, exe }
 
-const beginTx = util.promisify(db.conn.beginTransaction).bind(db.conn);
-const commitTx = util.promisify(db.conn.commit).bind(db.conn);
-const rollbackTx = util.promisify(db.conn.rollback).bind(db.conn);
 
 const ALLOWED_STATUS = ["PENDING", "APPROVED", "REJECTED"];
 

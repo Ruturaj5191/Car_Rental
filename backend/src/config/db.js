@@ -1,46 +1,44 @@
-const mysql = require("mysql");
-const util = require("util");
 const { Sequelize } = require("sequelize");
 
-// 1. RAW CONNECTION (Backward Compatibility)
-const conn = mysql.createConnection({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  port: process.env.DB_PORT || 3306,
-});
+// Initialize Sequelize with PostgreSQL (for Render)
+const sequelize = process.env.DATABASE_URL 
+  ? new Sequelize(process.env.DATABASE_URL, {
+      dialect: "postgres",
+      logging: false,
+      dialectOptions: {
+        ssl: {
+          require: true,
+          rejectUnauthorized: false,
+        },
+      },
+    })
+  : new Sequelize(
+      process.env.DB_NAME,
+      process.env.DB_USER,
+      process.env.DB_PASSWORD,
+      {
+        host: process.env.DB_HOST,
+        port: process.env.DB_PORT || 5432,
+        dialect: "postgres",
+        logging: false,
+        dialectOptions: {
+          ssl: {
+            require: true,
+            rejectUnauthorized: false, // Required for Render Postgres
+          },
+        },
+        pool: {
+          max: 5,
+          min: 0,
+          acquire: 30000,
+          idle: 10000,
+        },
+      }
+    );
 
-conn.connect((err) => {
-  if (err) {
-    console.error("DB CONNECT ERROR (RAW):", err.code, err.sqlMessage);
-  } else {
-    console.log("DB CONNECTED (RAW) ✅");
-  }
-});
 
-const exe = util.promisify(conn.query).bind(conn);
-
-// 2. SEQUELIZE INITIALIZATION
-const sequelize = new Sequelize(
-  process.env.DB_NAME,
-  process.env.DB_USER,
-  process.env.DB_PASSWORD,
-  {
-    host: process.env.DB_HOST,
-    port: process.env.DB_PORT || 3306,
-    dialect: "mysql",
-    logging: false, // Set to console.log if you want to see SQL queries
-    pool: {
-      max: 5,
-      min: 0,
-      acquire: 30000,
-      idle: 10000,
-    },
-  }
-);
-
-const testSequelize = async () => {
+// Test database connection
+const testConnection = async () => {
   try {
     await sequelize.authenticate();
     console.log("DB CONNECTED (SEQUELIZE) ✅");
@@ -48,7 +46,21 @@ const testSequelize = async () => {
     console.error("DB CONNECT ERROR (SEQUELIZE):", error.message);
   }
 };
-testSequelize();
 
-module.exports = { conn, exe, sequelize };
+testConnection();
 
+// RAW QUERY EXECUTION (for backward compatibility)
+const exe = async (sql, params = []) => {
+  try {
+    const [results] = await sequelize.query(sql, {
+      replacements: params,
+    });
+    return results;
+  } catch (error) {
+    console.error("QUERY ERROR:", error.message);
+    throw error;
+  }
+};
+
+// Export sequelize and exe for use in models and controllers
+module.exports = { sequelize, exe };
