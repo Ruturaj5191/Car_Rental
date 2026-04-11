@@ -22,16 +22,7 @@ const app = express();
 
 app.use(
   cors({
-    origin: (origin, callback) => {
-      const allowedOrigins = process.env.CLIENT_URL ? process.env.CLIENT_URL.split(",") : ["http://localhost:5173", "http://localhost:5174"];
-      // Allow requests with no origin (like mobile apps or curl) or matching origins
-      if (!origin || allowedOrigins.includes(origin) || origin.endsWith(".vercel.app")) {
-        callback(null, true);
-      } else {
-        console.warn(`Blocked by CORS: ${origin}`);
-        callback(new Error("Not allowed by CORS"));
-      }
-    },
+    origin: true, // Temporarily allow all origins to confirm the connection works
     credentials: true,
     exposedHeaders: ["Content-Disposition", "Content-Type"],
   })
@@ -52,9 +43,18 @@ app.use("/api/public", express.static("public"));
 app.use("/api/uploads", express.static(path.join(__dirname, "public", "uploads")));
 
 // ROUTES
-app.use("/api/", user_routes);
+app.use("/api", user_routes);
 app.use("/api/admin", admin_routes);
 app.use("/api/car-register", car_register);
+
+// Global Error Handler (Ensures CORS headers are sent even on errors)
+app.use((err, req, res, next) => {
+  console.error("SERVER ERROR:", err);
+  res.status(500).json({
+    success: false,
+    message: err.message || "Internal Server Error",
+  });
+});
 
 const PORT = process.env.PORT || 1000;
 app.listen(PORT, () => {
