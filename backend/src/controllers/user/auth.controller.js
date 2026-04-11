@@ -43,14 +43,15 @@ exports.register = async (req, res) => {
     // 🔐 Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // ✅ Insert user
-    await exe(
-      "INSERT INTO users (name, email, phone, password, role, created_at) VALUES (?, ?, ?, ?, ?, NOW())",
+    // ✅ Insert user with RETURNING id for Postgres
+    const [result] = await exe(
+      "INSERT INTO users (name, email, phone, password, role, created_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP) RETURNING id",
       [name, email, phone, hashedPassword, "user"]
     );
 
     return res.status(201).json({
       message: "Registration successful. Please login.",
+      user_id: result.id
     });
   } catch (err) {
     console.error("Register error:", err);
