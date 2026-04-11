@@ -9,8 +9,8 @@ exports.getAllCars = async (req, res) => {
         COALESCE(cat.name, '-') AS category_name
       FROM cars c
       LEFT JOIN categories cat ON c.category_id = cat.id
-      WHERE IFNULL(c.is_active, 1) = 1
-     ORDER BY IFNULL(c.is_available, 1) DESC, c.id DESC
+      WHERE COALESCE(c.is_active, 1) = 1
+     ORDER BY COALESCE(c.is_available, 1) DESC, c.id DESC
     `);
 
     res.json(data);
@@ -32,8 +32,8 @@ exports.availableCars = async (req, res) => {
         COALESCE(cat.name, '-') AS category_name
       FROM cars c
       LEFT JOIN categories cat ON c.category_id = cat.id
-      WHERE IFNULL(c.is_active, 1) = 1
-        AND IFNULL(c.is_available, 1) = 1
+      WHERE COALESCE(c.is_active, 1) = 1
+        AND COALESCE(c.is_available, 1) = 1
       ORDER BY c.id DESC
     `);
 
@@ -68,7 +68,7 @@ exports.filterCars = async (req, res) => {
         COALESCE(cat.name, '-') AS category_name
       FROM cars c
       LEFT JOIN categories cat ON c.category_id = cat.id
-      WHERE IFNULL(c.is_active, 1) = 1
+      WHERE COALESCE(c.is_active, 1) = 1
     `;
     const params = [];
 
@@ -109,11 +109,11 @@ exports.filterCars = async (req, res) => {
       params.push(min_rating);
     }
     if (available === "1") {
-      query += " AND IFNULL(c.is_available, 1) = 1";
+      query += " AND COALESCE(c.is_available, 1) = 1";
     }
 
 if (badge && badge !== "all") {
-  query += " AND TRIM(UPPER(IFNULL(c.badge,''))) = TRIM(UPPER(?))";
+  query += " AND TRIM(UPPER(COALESCE(c.badge,''))) = TRIM(UPPER(?))";
   params.push(badge);
 }
 
@@ -124,7 +124,7 @@ if (vehicle_type && vehicle_type !== "all") {
 
 
 
-    query += " ORDER BY IFNULL(c.is_available, 1) DESC, c.id DESC";
+    query += " ORDER BY COALESCE(c.is_available, 1) DESC, c.id DESC";
 
 
     const data = await exe(query, params);
@@ -160,7 +160,7 @@ exports.getCarById = async (req, res) => {
         COALESCE(cat.name, '-') AS category_name
       FROM cars c
       LEFT JOIN categories cat ON c.category_id = cat.id
-      WHERE c.id=? AND IFNULL(c.is_active, 1) = 1
+      WHERE c.id=? AND COALESCE(c.is_active, 1) = 1
       `,
       [id]
     );
@@ -220,8 +220,8 @@ exports.suggestCars = async (req, res) => {
         COALESCE(cat.name, '-') AS category_name
       FROM cars c
       LEFT JOIN categories cat ON c.category_id = cat.id
-      WHERE IFNULL(c.is_active, 1) = 1
-        AND IFNULL(c.is_available, 1) = 1
+      WHERE COALESCE(c.is_active, 1) = 1
+        AND COALESCE(c.is_available, 1) = 1
         ${exclude_car_id ? "AND c.id <> ?" : ""}
         ${city ? "AND c.city LIKE ?" : ""}
         ${category_id ? "AND c.category_id = ?" : ""}

@@ -18,13 +18,15 @@ exports.register = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const result = await exe(
-      "INSERT INTO admins (name, email, password, role) VALUES (?, ?, ?, ?)",
+    const [result] = await exe(
+      "INSERT INTO admins (name, email, password, role) VALUES (?, ?, ?, ?) RETURNING id",
       [name, email, hashedPassword, "admin"]
     );
 
+    const newId = result.id;
+
     const token = jwt.sign(
-      { id: result.insertId, role: "admin" },
+      { id: newId, role: "admin" },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRE }
     );
@@ -33,7 +35,7 @@ exports.register = async (req, res) => {
       success: true,
       message: "Admin registered successfully",
       token,
-      admin: { id: result.insertId, name, email, role: "admin" },
+      admin: { id: newId, name, email, role: "admin" },
     });
   } catch (error) {
     console.error("ADMIN REGISTER ERROR:", error);

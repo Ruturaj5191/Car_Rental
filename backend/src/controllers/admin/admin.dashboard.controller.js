@@ -5,25 +5,25 @@ exports.dashboard = async (req, res) => {
   try {
     // Monthly revenue (current month)
     const revenueRows = await exe(`
-      SELECT IFNULL(SUM(total_amount), 0) AS total
+      SELECT COALESCE(SUM(total_amount), 0) AS total
       FROM bookings
       WHERE status = 'COMPLETED'
-        AND MONTH(created_at) = MONTH(CURDATE())
-        AND YEAR(created_at) = YEAR(CURDATE())
+        AND EXTRACT(MONTH FROM created_at) = EXTRACT(MONTH FROM CURRENT_DATE)
+        AND EXTRACT(YEAR FROM created_at) = EXTRACT(YEAR FROM CURRENT_DATE)
     `);
 
     const bookingsRows = await exe(`
       SELECT COUNT(*) AS total
       FROM bookings
-      WHERE MONTH(created_at) = MONTH(CURDATE())
-        AND YEAR(created_at) = YEAR(CURDATE())
+      WHERE EXTRACT(MONTH FROM created_at) = EXTRACT(MONTH FROM CURRENT_DATE)
+        AND EXTRACT(YEAR FROM created_at) = EXTRACT(YEAR FROM CURRENT_DATE)
     `);
 
     const carRegisterUsersRows = await exe(`
       SELECT COUNT(*) AS total 
       FROM car_register_users
-      WHERE MONTH(created_at) = MONTH(CURDATE())
-        AND YEAR(created_at) = YEAR(CURDATE())
+      WHERE EXTRACT(MONTH FROM created_at) = EXTRACT(MONTH FROM CURRENT_DATE)
+        AND EXTRACT(YEAR FROM created_at) = EXTRACT(YEAR FROM CURRENT_DATE)
     `);
 
 
@@ -57,7 +57,7 @@ exports.dashboard = async (req, res) => {
 exports.revenueReport = async (req, res) => {
   try {
     const rows = await exe(`
-      SELECT IFNULL(SUM(total_amount), 0) AS total_revenue
+      SELECT COALESCE(SUM(total_amount), 0) AS total_revenue
       FROM bookings
       WHERE status = 'COMPLETED'
     `);
@@ -74,7 +74,7 @@ exports.barChart = async (req, res) => {
   try {
     const rows = await exe(`
       SELECT 
-        DATE_FORMAT(b.created_at, '%b') AS month,
+        TO_CHAR(b.created_at, 'Mon') AS month,
         cat.name AS category,
         SUM(b.total_amount) AS revenue
       FROM bookings b
