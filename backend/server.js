@@ -20,13 +20,21 @@ const car_register = require("./src/routes/car-register/index");
 
 const app = express();
 
-app.use(
-  cors({
-    origin: true, // Temporarily allow all origins to confirm the connection works
-    credentials: true,
-    exposedHeaders: ["Content-Disposition", "Content-Type"],
-  })
-);
+// app.use(
+//   cors({
+//     origin: true, // Temporarily allow all origins to confirm the connection works
+//     credentials: true,
+//     exposedHeaders: ["Content-Disposition", "Content-Type"],
+//   })
+// );
+
+
+app.use(cors({
+  origin: 'https://car-rental-three-pi.vercel.app',
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  credentials: true
+}));
+
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
