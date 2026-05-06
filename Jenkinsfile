@@ -17,7 +17,7 @@ pipeline {
             steps {
                 script {
                     dir('backend') {
-                        sh "docker build -t ${DOCKER_IMAGE_BACKEND}:latest ."
+                        bat "docker build -t %DOCKER_IMAGE_BACKEND%:latest ."
                     }
                 }
             }
@@ -27,7 +27,7 @@ pipeline {
             steps {
                 script {
                     dir('frontend') {
-                        sh "docker build --build-arg VITE_API_URL=http://localhost:5000/api -t ${DOCKER_IMAGE_FRONTEND}:latest ."
+                        bat "docker build --build-arg VITE_API_URL=http://localhost:5000/api -t %DOCKER_IMAGE_FRONTEND%:latest ."
                     }
                 }
             }
@@ -35,7 +35,7 @@ pipeline {
 
         stage('Run Application') {
             steps {
-                sh "docker-compose up -d"
+                bat "docker-compose up -d"
             }
         }
         
