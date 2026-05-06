@@ -37,6 +37,7 @@ const ReviewBookingPage = () => {
 
   const bookingModeFromUrl = (searchParams.get("booking_mode") || "RENTAL").toUpperCase();
   const billingTypeFromUrl = (searchParams.get("billing_type") || "PER_DAY").toUpperCase();
+  const paymentMethodFromUrl = (searchParams.get("payment_method") || "ONLINE").toUpperCase();
 
   const pickupFromUrl = searchParams.get("pickup_location") || "";
   const dropFromUrl = searchParams.get("drop_location") || "";
@@ -57,6 +58,17 @@ const ReviewBookingPage = () => {
   const [errorMsg, setErrorMsg] = useState("");
   const [suggestions, setSuggestions] = useState([]);
   const [sLoading, setSLoading] = useState(false);
+  const [paymentStep, setPaymentStep] = useState(false);
+
+  const loadRazorpayScript = () => {
+    return new Promise((resolve) => {
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
 
 
   const [coords, setCoords] = useState({
@@ -72,6 +84,7 @@ const ReviewBookingPage = () => {
     drop_location: dropFromUrl,
     start_date: startDateFromUrl,
     end_date: bookingModeFromUrl === "TRANSFER" ? startDateFromUrl : endDateFromUrl,
+    payment_method: paymentMethodFromUrl,
   });
 
 
@@ -96,6 +109,7 @@ const ReviewBookingPage = () => {
       drop_location: dropFromUrl,
       start_date: startDateFromUrl,
       end_date: bookingModeFromUrl === "TRANSFER" ? startDateFromUrl : endDateFromUrl,
+      payment_method: paymentMethodFromUrl,
     });
 
     setCoords({
@@ -242,16 +256,96 @@ const ReviewBookingPage = () => {
         // ✅ NEW
         billing_type: form.billing_type,
         distance_km: form.billing_type === "PER_KM" ? oneWayKm : null, // ✅ one-way only
+        payment_method: form.payment_method, // ✅ Cash or Online
       };
 
       const res = await userApi.post("/bookings/booking", payload);
+      const newBookingId = res.data?.booking_id;
+      
+      if (!newBookingId) {
+         throw new Error("Missing booking ID in response");
+      }
 
-      alert(`Booking Created ✅\nBooking ID: ${res.data?.booking_id || ""}`);
-      navigate("/my-bookings");
+      // ✅ Cash Flow
+      if (form.payment_method === "CASH") {
+        alert(`Booking Confirmed via Cash ✅\nBooking ID: ${newBookingId}`);
+        navigate("/my-bookings");
+        setSaving(false);
+        return;
+      }
+
+      setPaymentStep(true);
+
+      // Load Razorpay Script
+      const resScript = await loadRazorpayScript();
+      if (!resScript) {
+        alert("Razorpay SDK failed to load. Are you online?");
+        setSaving(false);
+        setPaymentStep(false);
+        return;
+      }
+
+      // Create Order
+      const orderRes = await userApi.post("/payment/order", {
+        amount: total,
+        booking_id: newBookingId
+      });
+
+      if (!orderRes.data || !orderRes.data.success) {
+        alert("Failed to create payment order");
+        setSaving(false);
+        setPaymentStep(false);
+        return;
+      }
+
+      const { order, key_id } = orderRes.data;
+
+      const options = {
+        key: key_id,
+        amount: order.amount,
+        currency: order.currency,
+        name: "Car Rental",
+        description: `Booking ID: ${newBookingId}`,
+        order_id: order.id,
+        handler: async function (response) {
+          try {
+            await userApi.post("/payment/verify", {
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+              booking_id: newBookingId
+            });
+            alert(`Booking Created & Payment Successful ✅\nBooking ID: ${newBookingId}`);
+            navigate("/my-bookings");
+          } catch (err) {
+            console.error("Payment verification failed", err);
+            alert("Payment verification failed. Please contact support.");
+            navigate("/my-bookings");
+          }
+        },
+        prefill: {
+          name: "User",
+          email: "",
+          contact: ""
+        },
+        theme: {
+          color: "#0891b2" // cyan-600
+        }
+      };
+
+      const paymentObject = new window.Razorpay(options);
+      
+      paymentObject.on("payment.failed", function (response) {
+        alert("Payment Failed. Reason: " + response.error.description);
+        navigate("/my-bookings");
+      });
+
+      paymentObject.open();
+
     } catch (err) {
       console.error("Create booking error:", err);
 
-      const msg = err?.response?.data?.message || "Booking failed";
+      const msg = err?.response?.data?.message || err.message || "Booking failed";
       setErrorMsg(msg);
 
       if (String(msg).toLowerCase().includes("already booked")) {
@@ -260,8 +354,8 @@ const ReviewBookingPage = () => {
         setSuggestions([]);
       }
     } finally {
-
       setSaving(false);
+      setPaymentStep(false);
     }
   };
 
@@ -395,24 +489,41 @@ const ReviewBookingPage = () => {
             </span>
           </div>
 
-          {/* ✅ Billing Type selector */}
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">Billing Type</label>
-            <select
-              name="billing_type"
-              value={form.billing_type}
-              onChange={handleChange}
-              className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-cyan-500 outline-none"
-            >
-              <option value="PER_DAY">Per Day</option>
-              <option value="PER_KM">Per KM</option>
-            </select>
-            {form.billing_type === "PER_KM" && !oneWayKm ? (
-              <p className="mt-2 text-xs text-red-600 font-semibold">
-                KM not available. Go back and select locations from Google suggestions.
-              </p>
-            ) : null}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* ✅ Billing Type selector */}
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">Billing Type</label>
+              <select
+                name="billing_type"
+                value={form.billing_type}
+                onChange={handleChange}
+                className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-cyan-500 outline-none"
+              >
+                <option value="PER_DAY">Per Day</option>
+                <option value="PER_KM">Per KM</option>
+              </select>
+              {form.billing_type === "PER_KM" && !oneWayKm ? (
+                <p className="mt-2 text-xs text-red-600 font-semibold">
+                  KM not available. Go back and select locations.
+                </p>
+              ) : null}
+            </div>
+
+            {/* ✅ Payment Method selector */}
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">Payment Method</label>
+              <select
+                name="payment_method"
+                value={form.payment_method}
+                onChange={handleChange}
+                className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-gray-50 focus:bg-white focus:border-cyan-500 outline-none"
+              >
+                <option value="ONLINE">Online (Razorpay)</option>
+                <option value="CASH">Cash</option>
+              </select>
+            </div>
           </div>
+
 
           <div className="grid grid-cols-1 gap-4">
             <div>
@@ -486,7 +597,7 @@ const ReviewBookingPage = () => {
             {saving ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                Booking...
+                {paymentStep ? "Initializing Payment..." : "Booking..."}
               </>
             ) : (
               <>

@@ -36,7 +36,7 @@ async function checkOverlapBooking(car_id, start_date, end_date) {
     `SELECT id
      FROM bookings
      WHERE car_id=?
-       AND LOWER(status) NOT IN ('cancelled', 'cancel_requested')
+       AND UPPER(status) IN ('BOOKED', 'APPROVED', 'CONFIRMED', 'PAID', 'COMPLETED')
        AND NOT (end_date < ? OR start_date > ?)
      LIMIT 1`,
     [car_id, start_date, end_date]
@@ -68,6 +68,7 @@ async function createBooking({
 
   billing_type = "PER_DAY", // PER_DAY | PER_KM
   distance_km = null,       // one-way from frontend
+  payment_method = "ONLINE", // CASH | ONLINE
 }) {
   const car = await getCarById(car_id);
   if (!car) throw new Error("Car not found");
@@ -121,13 +122,21 @@ async function createBooking({
 
 
 
+  // ✅ Normalize payment method
+  const payMethod = String(payment_method || "ONLINE").toUpperCase() === "CASH" ? "CASH" : "ONLINE";
+
+  // ✅ Cash bookings auto-confirm; Online stay PENDING until Razorpay
+  const initialStatus = payMethod === "CASH" ? "BOOKED" : "PENDING";
+  const initialPaymentStatus = payMethod === "CASH" ? "SUCCESS" : "PENDING";
+
   // ✅ INSERT using your table columns
   const result = await exe(
     `INSERT INTO bookings
       (user_id, car_id, pickup_location, drop_location, start_date, end_date,
        distance_km, rate_per_day, rate_per_km,
-       total_amount, status, booking_mode, billing_type, start_time)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       total_amount, status, booking_mode, billing_type, start_time,
+       payment_method, payment_status)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       user_id,
       car_id,
@@ -141,13 +150,15 @@ async function createBooking({
       rate_per_km,
 
       total_amount,
-      "BOOKED",
+      initialStatus,
       booking_mode,
       billing_type,
       start_time,
+      payMethod,
+      initialPaymentStatus,
     ]
   );
-  
+
 
   const booking_id = result?.insertId || result?.[0]?.insertId || null;
 
@@ -160,6 +171,7 @@ async function createBooking({
     rate_per_day,
     rate_per_km,
     total_amount,
+    payment_method: payMethod,
   };
 }
 

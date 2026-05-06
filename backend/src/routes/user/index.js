@@ -13,6 +13,7 @@ router.use("/contact", require("./contact.routes"));
 router.use("/bookings", require("./cancelRequest.routes"));
 router.use("/event-requests", require("./eventRequest.routes"));
 router.use("/tours", require("./tours.routes")); // ✅ NEW
+router.use("/payment", require("./payment.routes")); // ✅ NEW Payment Gateway
 
 
 module.exports = router;

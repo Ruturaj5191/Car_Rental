@@ -9,8 +9,8 @@ exports.getAllCars = async (req, res) => {
         COALESCE(cat.name, '-') AS category_name
       FROM cars c
       LEFT JOIN categories cat ON c.category_id = cat.id
-      WHERE COALESCE(c.is_active, 1) = 1
-     ORDER BY COALESCE(c.is_available, 1) DESC, c.id DESC
+      WHERE IFNULL(c.is_active, 1) = 1
+     ORDER BY IFNULL(c.is_available, 1) DESC, c.id DESC
     `);
 
     res.json(data);
@@ -32,8 +32,8 @@ exports.availableCars = async (req, res) => {
         COALESCE(cat.name, '-') AS category_name
       FROM cars c
       LEFT JOIN categories cat ON c.category_id = cat.id
-      WHERE COALESCE(c.is_active, 1) = 1
-        AND COALESCE(c.is_available, 1) = 1
+      WHERE IFNULL(c.is_active, 1) = 1
+        AND IFNULL(c.is_available, 1) = 1
       ORDER BY c.id DESC
     `);
 
@@ -60,6 +60,8 @@ exports.filterCars = async (req, res) => {
       available,
       badge, 
       vehicle_type,
+      start_date,
+      end_date
     } = req.query;
 
     let query = `
@@ -68,7 +70,7 @@ exports.filterCars = async (req, res) => {
         COALESCE(cat.name, '-') AS category_name
       FROM cars c
       LEFT JOIN categories cat ON c.category_id = cat.id
-      WHERE COALESCE(c.is_active, 1) = 1
+      WHERE IFNULL(c.is_active, 1) = 1
     `;
     const params = [];
 
@@ -109,11 +111,11 @@ exports.filterCars = async (req, res) => {
       params.push(min_rating);
     }
     if (available === "1") {
-      query += " AND COALESCE(c.is_available, 1) = 1";
+      query += " AND IFNULL(c.is_available, 1) = 1";
     }
 
 if (badge && badge !== "all") {
-  query += " AND TRIM(UPPER(COALESCE(c.badge,''))) = TRIM(UPPER(?))";
+  query += " AND TRIM(UPPER(IFNULL(c.badge,''))) = TRIM(UPPER(?))";
   params.push(badge);
 }
 
@@ -122,13 +124,36 @@ if (vehicle_type && vehicle_type !== "all") {
   params.push(vehicle_type.toUpperCase());
 }
 
-
-
-    query += " ORDER BY COALESCE(c.is_available, 1) DESC, c.id DESC";
-
+    query += " ORDER BY IFNULL(c.is_available, 1) DESC, c.id DESC";
 
     const data = await exe(query, params);
-    res.json(data);
+
+    // ✅ CHECK FOR BOOKINGS — if no dates given, default to local today (assuming +05:30 IST for Indian system)
+    let bookedCarIds = [];
+    const getLocalToday = () => {
+      const d = new Date();
+      d.setMinutes(d.getMinutes() + d.getTimezoneOffset() + 330); // IST is +5:30
+      return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, '0') + "-" + String(d.getDate()).padStart(2, '0');
+    };
+    
+    const checkStart = start_date || getLocalToday();
+    const checkEnd   = end_date   || checkStart;
+
+    const bookingsForDates = await exe(`
+      SELECT DISTINCT car_id 
+      FROM bookings 
+      WHERE UPPER(status) IN ('BOOKED', 'APPROVED', 'CONFIRMED', 'PAID', 'COMPLETED')
+        AND end_date >= ? AND start_date <= ?
+    `, [checkStart, checkEnd]);
+    bookedCarIds = bookingsForDates.map(b => b.car_id);
+
+    // Attach is_booked status
+    const finalData = data.map(car => ({
+      ...car,
+      is_booked: bookedCarIds.includes(car.id) ? 1 : 0
+    }));
+
+    res.json(finalData);
   } catch (err) {
     console.error("FILTER CARS ERROR:", err);
     res.status(500).json({ message: "Failed to filter cars" });
@@ -152,6 +177,7 @@ exports.getCategories = async (req, res) => {
 exports.getCarById = async (req, res) => {
   try {
     const { id } = req.params;
+    const { start_date, end_date } = req.query;
 
     const data = await exe(
       `
@@ -160,14 +186,37 @@ exports.getCarById = async (req, res) => {
         COALESCE(cat.name, '-') AS category_name
       FROM cars c
       LEFT JOIN categories cat ON c.category_id = cat.id
-      WHERE c.id=? AND COALESCE(c.is_active, 1) = 1
+      WHERE c.id=? AND IFNULL(c.is_active, 1) = 1
       `,
       [id]
     );
 
     if (!data.length) return res.status(404).json({ message: "Car not found" });
 
-    res.json(data[0]);
+    let car = data[0];
+
+    // ✅ CHECK FOR BOOKINGS — if no dates given, default to local today (assuming +05:30 IST for Indian system)
+    const getLocalToday = () => {
+      const d = new Date();
+      d.setMinutes(d.getMinutes() + d.getTimezoneOffset() + 330);
+      return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, '0') + "-" + String(d.getDate()).padStart(2, '0');
+    };
+
+    const checkStart = start_date || getLocalToday();
+    const checkEnd   = end_date   || checkStart;
+
+    const bookingsForCar = await exe(`
+      SELECT 1 
+      FROM bookings 
+      WHERE car_id = ?
+        AND UPPER(status) IN ('BOOKED', 'APPROVED', 'CONFIRMED', 'PAID', 'COMPLETED')
+        AND end_date >= ? AND start_date <= ?
+      LIMIT 1
+    `, [id, checkStart, checkEnd]);
+
+    car.is_booked = bookingsForCar.length > 0 ? 1 : 0;
+
+    res.json(car);
   } catch (err) {
     console.error("GET CAR BY ID ERROR:", err);
     res.status(500).json({ message: "Failed to fetch car" });
@@ -220,8 +269,8 @@ exports.suggestCars = async (req, res) => {
         COALESCE(cat.name, '-') AS category_name
       FROM cars c
       LEFT JOIN categories cat ON c.category_id = cat.id
-      WHERE COALESCE(c.is_active, 1) = 1
-        AND COALESCE(c.is_available, 1) = 1
+      WHERE IFNULL(c.is_active, 1) = 1
+        AND IFNULL(c.is_available, 1) = 1
         ${exclude_car_id ? "AND c.id <> ?" : ""}
         ${city ? "AND c.city LIKE ?" : ""}
         ${category_id ? "AND c.category_id = ?" : ""}
@@ -231,7 +280,7 @@ exports.suggestCars = async (req, res) => {
           SELECT 1
           FROM bookings b
           WHERE b.car_id = c.id
-            AND COALESCE(b.status,'BOOKED') NOT IN ('CANCELLED')
+            AND UPPER(b.status) IN ('BOOKED', 'APPROVED', 'CONFIRMED', 'PAID', 'COMPLETED')
             AND (
               DATE(?) <= DATE(COALESCE(b.end_date, b.start_date))
               AND DATE(?) >= DATE(b.start_date)

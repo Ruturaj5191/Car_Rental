@@ -187,12 +187,21 @@ const CarsPage = () => {
   const fetchAllCars = async () => {
     try {
       setLoading(true);
-      const res = await userApi.get("/cars/filter", { params: { vehicle_type: 'CAR' } });
+      const params = { vehicle_type: 'CAR' };
+      
+      const st = trip?.start_date || JSON.parse(localStorage.getItem("tripSearch") || "{}").start_date;
+      const et = trip?.end_date || JSON.parse(localStorage.getItem("tripSearch") || "{}").end_date;
+      
+      if (st) params.start_date = st;
+      if (et) params.end_date = et;
+
+      const res = await userApi.get("/cars/filter", { params });
       const list = Array.isArray(res.data) ? res.data : [];
 
       const normalized = list.map((c) => ({
         ...c,
-        is_available: Number(c.is_available ?? 0),
+        is_available: Number(c.is_available ?? 0) === 1,
+        is_booked: Number(c.is_booked || 0) === 1,
       }));
 
       setCars(normalized);
@@ -228,6 +237,13 @@ const CarsPage = () => {
       }
 
       const params = { vehicle_type: 'CAR' };
+      
+      const st = trip?.start_date || JSON.parse(localStorage.getItem("tripSearch") || "{}").start_date;
+      const et = trip?.end_date || JSON.parse(localStorage.getItem("tripSearch") || "{}").end_date;
+      
+      if (st) params.start_date = st;
+      if (et) params.end_date = et;
+
       if (selectedLocation !== "all") params.city = selectedLocation;
       if (selectedFuel !== "all") params.fuel_type = selectedFuel;
       if (selectedSeats !== "all") params.seats = selectedSeats;
@@ -242,7 +258,8 @@ const CarsPage = () => {
       setCars(
         list.map((c) => ({
           ...c,
-          is_available: Number(c.is_available ?? 0),
+          is_available: Number(c.is_available ?? 0) === 1,
+          is_booked: Number(c.is_booked || 0) === 1,
         }))
       );
     } catch (err) {
@@ -263,7 +280,7 @@ const CarsPage = () => {
   useEffect(() => {
     fetchFilteredCars();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedLocation, selectedFuel, selectedSeats, selectedBadge, selectedVehicleType, minPrice, maxPrice]);
+  }, [selectedLocation, selectedFuel, selectedSeats, selectedBadge, selectedVehicleType, minPrice, maxPrice, trip]);
 
   // -------------------------
   // Scroll animations
@@ -656,14 +673,15 @@ const CarsPage = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
             {filteredCars.map((car) => {
               const isFavorite = favorites.includes(car.id);
-              const isAvailable = Number(car.is_available) === 1;
+              const isAvailable = car.is_available === true;
+              const isBooked = car.is_booked === true;
               const imageUrl = car.cars_image ? `${import.meta.env.VITE_API_URL}/public/${car.cars_image}` : "";
 
               return (
                 <div
                   key={car.id}
                   className={`car-card group bg-white rounded-3xl overflow-hidden shadow-md transition-all duration-500 border border-gray-100
-                    ${isAvailable ? "hover:shadow-2xl hover:-translate-y-2" : "opacity-60"}`}
+                    ${isAvailable && !isBooked ? "hover:shadow-2xl hover:-translate-y-2" : "opacity-60"}`}
                 >
                   {/* IMAGE */}
                   <div className="relative h-56 overflow-hidden bg-gray-100">
@@ -771,15 +789,17 @@ const CarsPage = () => {
                     </div>
 
                     <button
-                      disabled={!isAvailable}
-                      onClick={() => isAvailable && handleBookNow(car)}
+                      disabled={!isAvailable || isBooked}
+                      onClick={() => isAvailable && !isBooked && handleBookNow(car)}
                       className={`w-full font-bold py-4 rounded-2xl transition-all duration-300 shadow-xl flex items-center justify-center gap-3
-                        ${isAvailable
-                          ? "bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-700 hover:to-teal-700 text-white hover:shadow-2xl transform hover:scale-105"
-                          : "bg-gray-200 text-gray-500 cursor-not-allowed opacity-70"
+                        ${isBooked 
+                          ? "bg-red-100 text-red-600 border-2 border-red-200 cursor-not-allowed"
+                          : !isAvailable 
+                            ? "bg-gray-200 text-gray-500 cursor-not-allowed opacity-70"
+                            : "bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-700 hover:to-teal-700 text-white hover:shadow-2xl transform hover:scale-105"
                         }`}
                     >
-                      {isAvailable ? "Book Now" : "Not Available"}
+                      {isBooked ? "Booked" : isAvailable ? "Book Now" : "Not Available"}
                     </button>
                   </div>
                 </div>

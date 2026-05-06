@@ -11,95 +11,83 @@ import {
   Loader2,
 } from "lucide-react";
 import userApi from "../utils/userApi";
-import { Autocomplete, useLoadScript } from "@react-google-maps/api";
-
-const libraries = ["places"];
-
-function toNum(v) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
-
-// ✅ Haversine KM (straight-line) – no extra API cost
-function haversineKm(a, b) {
-  if (!a?.lat || !a?.lng || !b?.lat || !b?.lng) return null;
-  const R = 6371;
-  const toRad = (x) => (x * Math.PI) / 180;
-
-  const dLat = toRad(b.lat - a.lat);
-  const dLng = toRad(b.lng - a.lng);
-  const lat1 = toRad(a.lat);
-  const lat2 = toRad(b.lat);
-
-  const s =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-
-  const c = 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
-  return Number((R * c).toFixed(2));
-}
-
-// ✅ Google Places input (fixes “one letter then stops” issues by keeping input controlled)
 const PlacesInput = ({
-  isLoaded,
   value,
   onChange,
   onSelect,
   placeholder,
   disabled,
 }) => {
-  const acRef = useRef(null);
+  const [suggestions, setSuggestions] = useState([]);
+  const [show, setShow] = useState(false);
+  const containerRef = useRef(null);
 
-  // fallback if google not loaded
-  if (!isLoaded) {
-    return (
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        disabled={disabled}
-        className="w-full px-4 py-3 rounded-2xl border-2 border-gray-200 bg-gray-50 focus:bg-white outline-none disabled:opacity-60"
-        autoComplete="off"
-      />
-    );
-  }
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setShow(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleFetch = async (query) => {
+    if (!query || query.length < 3) {
+      setSuggestions([]);
+      return;
+    }
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`);
+      const data = await res.json();
+      setSuggestions(data);
+      setShow(true);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      if (show) handleFetch(value);
+    }, 500);
+    return () => clearTimeout(delayDebounceFn);
+  }, [value]);
 
   return (
-    <Autocomplete
-      onLoad={(ac) => (acRef.current = ac)}
-      onPlaceChanged={() => {
-        const place = acRef.current?.getPlace?.();
-
-        const address =
-          place?.formatted_address ||
-          place?.name ||
-          place?.vicinity ||
-          value ||
-          "";
-
-        const lat = place?.geometry?.location?.lat?.();
-        const lng = place?.geometry?.location?.lng?.();
-
-        // set text
-        onChange(address);
-
-        // save coords
-        onSelect?.({ address, lat, lng });
-      }}
-      options={{
-        // componentRestrictions: { country: "in" },
-        fields: ["formatted_address", "name", "geometry.location", "vicinity"],
-      }}
-    >
+    <div className="relative" ref={containerRef}>
       <input
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          onChange(e.target.value);
+          setShow(true);
+        }}
+        onFocus={() => {
+          if (value.length >= 3) handleFetch(value);
+        }}
         placeholder={placeholder}
         disabled={disabled}
         className="w-full px-4 py-3 rounded-2xl border-2 border-gray-200 bg-gray-50 focus:bg-white outline-none disabled:opacity-60"
         autoComplete="off"
       />
-    </Autocomplete>
+      {show && suggestions.length > 0 && (
+        <ul className="absolute z-50 w-full bg-white border border-gray-200 mt-1 rounded-xl shadow-lg max-h-60 overflow-y-auto left-0 text-left">
+          {suggestions.map((item) => (
+            <li
+              key={item.place_id}
+              className="px-4 py-3 hover:bg-cyan-50 cursor-pointer text-sm text-gray-700 border-b border-gray-100 last:border-0"
+              onClick={() => {
+                onChange(item.display_name);
+                onSelect?.({ address: item.display_name, lat: parseFloat(item.lat), lng: parseFloat(item.lon) });
+                setShow(false);
+              }}
+            >
+              {item.display_name}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 };
 
@@ -114,11 +102,6 @@ const statusPill = (status) => {
 
 export default function EventsPage() {
   const navigate = useNavigate();
-
-  const { isLoaded } = useLoadScript({
-    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_KEY || "",
-    libraries,
-  });
 
   const [form, setForm] = useState({
     event_type: "WEDDING", // WEDDING/CORPORATE/TOUR/PARTY/OTHER
@@ -209,7 +192,7 @@ export default function EventsPage() {
 
     if (form.billing_type === "PER_KM") {
       if (!coords.pickup.lat || !coords.pickup.lng || !coords.drop.lat || !coords.drop.lng) {
-        return "Select Pickup & Drop from Google suggestions (click a suggestion) to get lat/lng";
+        return "Select Pickup & Drop from suggestions (click a suggestion) to get lat/lng";
       }
       const km = toNum(form.distance_km);
       if (!km || km <= 0) return "Distance KM is required for PER_KM";
@@ -578,7 +561,6 @@ export default function EventsPage() {
               <MapPin className="inline w-4 h-4 mr-1" /> Pickup Location
             </label>
             <PlacesInput
-              isLoaded={isLoaded}
               value={form.pickup_location}
               onChange={(v) => {
                 setForm((p) => ({ ...p, pickup_location: v }));
@@ -603,7 +585,6 @@ export default function EventsPage() {
             </label>
 
             <PlacesInput
-              isLoaded={isLoaded}
               value={form.drop_location}
               onChange={(v) => {
                 setForm((p) => ({ ...p, drop_location: v }));

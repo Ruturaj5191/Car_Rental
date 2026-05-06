@@ -136,7 +136,8 @@ const CarRegisterAddCar = () => {
       setResetKey((k) => k + 1); // clears file inputs
     } catch (err) {
       console.error(err);
-      alert("Submission failed ❌");
+      const msg = err.response?.data?.message || "Submission failed";
+      alert(msg + " ❌");
     }
   };
 

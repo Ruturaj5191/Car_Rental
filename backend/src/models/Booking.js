@@ -41,7 +41,7 @@ const Booking = sequelize.define("Booking", {
   },
   status: {
     type: DataTypes.STRING,
-    defaultValue: "BOOKED",
+    defaultValue: "PENDING",
   },
   booking_mode: {
     type: DataTypes.ENUM("RENTAL", "TRANSFER"),
@@ -57,6 +57,23 @@ const Booking = sequelize.define("Booking", {
   created_at: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW,
+  },
+  payment_status: {
+    type: DataTypes.ENUM("PENDING", "SUCCESS", "FAILED"),
+    defaultValue: "PENDING",
+  },
+  razorpay_order_id: {
+    type: DataTypes.STRING,
+  },
+  razorpay_payment_id: {
+    type: DataTypes.STRING,
+  },
+  razorpay_signature: {
+    type: DataTypes.STRING,
+  },
+  payment_method: {
+    type: DataTypes.ENUM("CASH", "ONLINE"),
+    defaultValue: "ONLINE",
   },
 }, {
   tableName: "bookings",

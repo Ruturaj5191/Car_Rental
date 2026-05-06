@@ -61,6 +61,7 @@ const CarDetails = () => {
       pickup_lng: toNumOrNull(qs.get("pickup_lng")),
       drop_lat: toNumOrNull(qs.get("drop_lat")),
       drop_lng: toNumOrNull(qs.get("drop_lng")),
+      payment_method: qs.get("payment_method") || "ONLINE",
     };
 
     const hasUrlTrip = t.pickup_location && t.drop_location && t.start_date;
@@ -89,13 +90,14 @@ const CarDetails = () => {
           pickup_lng: toNumOrNull(parsed.pickup_lng),
           drop_lat: toNumOrNull(parsed.drop_lat),
           drop_lng: toNumOrNull(parsed.drop_lng),
+          payment_method: parsed.payment_method || "ONLINE",
         };
       } catch {
-        return { ...t, booking_mode: "RENTAL", billing_type: "PER_DAY" };
+        return { ...t, booking_mode: "RENTAL", billing_type: "PER_DAY", payment_method: "ONLINE" };
       }
     }
 
-    return { ...t, booking_mode: "RENTAL", billing_type: "PER_DAY" };
+    return { ...t, booking_mode: "RENTAL", billing_type: "PER_DAY", payment_method: "ONLINE" };
   }, [location.search]);
 
   useEffect(() => {
@@ -103,7 +105,11 @@ const CarDetails = () => {
       try {
         setLoadingCar(true);
         setError("");
-        const res = await userApi.get(`/cars/${id}`);
+        const qs = new URLSearchParams();
+        if (trip.start_date) qs.set("start_date", trip.start_date);
+        if (trip.end_date) qs.set("end_date", trip.end_date);
+        
+        const res = await userApi.get(`/cars/${id}?${qs.toString()}`);
         setCar(res.data || null);
       } catch (err) {
         console.error("Car details error:", err);
@@ -158,6 +164,7 @@ const CarDetails = () => {
     qs.set("start_time", trip.start_time || "");
     qs.set("booking_mode", mode);
     qs.set("billing_type", billing);
+    qs.set("payment_method", trip.payment_method || "ONLINE");
 
     qs.set("end_date", mode === "TRANSFER" ? (trip.start_date || "") : (trip.end_date || ""));
 
@@ -318,6 +325,23 @@ const CarDetails = () => {
                 <Row label="Drop" value={trip.drop_location || "—"} />
                 <Row label="Start" value={trip.start_date || "—"} />
                 <Row label="End" value={(trip.booking_mode === "TRANSFER" ? trip.start_date : trip.end_date) || "—"} />
+                <div className="flex items-center justify-between gap-3 pt-2 border-t">
+                  <div className="text-gray-500 font-semibold">Payment</div>
+                  <select 
+                    value={trip.payment_method}
+                    onChange={(e) => {
+                      const newT = { ...trip, payment_method: e.target.value };
+                      localStorage.setItem("tripSearch", JSON.stringify(newT));
+                      const url = new URLSearchParams(location.search);
+                      url.set("payment_method", e.target.value);
+                      navigate(`?${url.toString()}`, { replace: true });
+                    }}
+                    className="px-2 py-1 bg-gray-50 border border-gray-200 rounded-md outline-none text-gray-900 font-black text-right cursor-pointer"
+                  >
+                    <option value="ONLINE">Online</option>
+                    <option value="CASH">Cash</option>
+                  </select>
+                </div>
               </div>
 
               <div className="my-5 border-t" />
@@ -337,25 +361,33 @@ const CarDetails = () => {
 
                 <div
                   className={`px-3 py-1.5 rounded-full text-xs font-black ${
-                    Number(car.is_available ?? 1) === 1
-                      ? "bg-green-100 text-green-700"
-                      : "bg-red-100 text-red-700"
+                    Number(car.is_booked || 0) === 1
+                      ? "bg-red-100 text-red-700 border border-red-200"
+                      : Number(car.is_available ?? 1) === 1
+                      ? "bg-green-100 text-green-700 border border-green-200"
+                      : "bg-gray-100 text-gray-700 border border-gray-200"
                   }`}
                 >
-                  {Number(car.is_available ?? 1) === 1 ? "AVAILABLE" : "NOT AVAILABLE"}
+                  {Number(car.is_booked || 0) === 1 
+                    ? "BOOKED" 
+                    : Number(car.is_available ?? 1) === 1 ? "AVAILABLE" : "NOT AVAILABLE"}
                 </div>
               </div>
 
               <button
                 onClick={handleBookNow}
-                disabled={Number(car.is_available ?? 1) !== 1}
-                className={`mt-6 w-full py-3 rounded-2xl font-black transition ${
-                  Number(car.is_available ?? 1) === 1
-                    ? "bg-gradient-to-r from-cyan-600 to-teal-600 text-white hover:opacity-95"
-                    : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                disabled={Number(car.is_available ?? 1) !== 1 || Number(car.is_booked || 0) === 1}
+                className={`mt-6 w-full py-4 rounded-2xl font-black transition-all shadow-xl ${
+                  Number(car.is_booked || 0) === 1
+                    ? "bg-red-100 text-red-600 border-2 border-red-200 cursor-not-allowed"
+                    : Number(car.is_available ?? 1) !== 1
+                    ? "bg-gray-200 text-gray-500 cursor-not-allowed opacity-70"
+                    : "bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-700 hover:to-teal-700 text-white hover:shadow-2xl transform hover:scale-105"
                 }`}
               >
-                Book Now
+                {Number(car.is_booked || 0) === 1 
+                  ? "Booked" 
+                  : Number(car.is_available ?? 1) === 1 ? "Book Now" : "Not Available"}
               </button>
             </div>
           </div>

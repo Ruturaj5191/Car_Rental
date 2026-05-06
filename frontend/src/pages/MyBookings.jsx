@@ -184,8 +184,19 @@ const MyBookings = () => {
                           Total: ₹{b.total_amount}
                         </div>
 
-                        <div className="text-xs mt-1">
-                          Status: <span className="font-bold">{st || "BOOKED"}</span>
+                        <div className="text-xs mt-1 space-y-1">
+                          <div>
+                            Status: <span className="font-bold">{st || "BOOKED"}</span>
+                          </div>
+                          {b.payment_status && (
+                            <div>
+                              Payment Status: <span className={`font-bold ${
+                                b.payment_status === "SUCCESS" ? "text-green-600" :
+                                b.payment_status === "FAILED" ? "text-red-600" :
+                                "text-yellow-600"
+                              }`}>{b.payment_status}</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>

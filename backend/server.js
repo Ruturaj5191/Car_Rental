@@ -20,28 +20,20 @@ const car_register = require("./src/routes/car-register/index");
 
 const app = express();
 
-// app.use(
-//   cors({
-//     origin: true, // Temporarily allow all origins to confirm the connection works
-//     credentials: true,
-//     exposedHeaders: ["Content-Disposition", "Content-Type"],
-//   })
-// );
-
-
-app.use(cors({
-  origin: 'https://car-rental-three-pi.vercel.app',
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  credentials: true
-}));
-
+app.use(
+  cors({
+    origin: process.env.CLIENT_URL ? process.env.CLIENT_URL.split(",") : ["http://localhost:5173", "http://localhost:5174"],
+    credentials: true,
+    exposedHeaders: ["Content-Disposition", "Content-Type"],
+  })
+);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(
   fileUpload({
     useTempFiles: true,
-    tempFileDir: "/tmp/",
+    tempFileDir: path.join(__dirname, "tmp"),
     limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
     abortOnLimit: true,
   })
@@ -51,18 +43,9 @@ app.use("/api/public", express.static("public"));
 app.use("/api/uploads", express.static(path.join(__dirname, "public", "uploads")));
 
 // ROUTES
-app.use("/api", user_routes);
+app.use("/api/", user_routes);
 app.use("/api/admin", admin_routes);
 app.use("/api/car-register", car_register);
-
-// Global Error Handler (Ensures CORS headers are sent even on errors)
-app.use((err, req, res, next) => {
-  console.error("SERVER ERROR:", err);
-  res.status(500).json({
-    success: false,
-    message: err.message || "Internal Server Error",
-  });
-});
 
 const PORT = process.env.PORT || 1000;
 app.listen(PORT, () => {

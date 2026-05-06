@@ -171,6 +171,7 @@ exports.getBookingById = async (req, res) => {
 
 
 const ALLOWED_STATUS = [
+  "PENDING",
   "BOOKED",
   "APPROVED",
   "CONFIRMED", 

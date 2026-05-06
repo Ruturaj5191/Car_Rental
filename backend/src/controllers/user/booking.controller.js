@@ -86,6 +86,7 @@ exports.createBooking = async (req, res) => {
       // ✅ NEW
       billing_type: (req.body.billing_type || "PER_DAY").toUpperCase(),
       distance_km: req.body.distance_km ?? null, // one-way from frontend
+      payment_method: (req.body.payment_method || "ONLINE").toUpperCase(), // CASH | ONLINE
     };
 
     const data = await bookingService.createBooking(payload);

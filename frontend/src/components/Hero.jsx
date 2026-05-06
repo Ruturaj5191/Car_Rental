@@ -13,13 +13,8 @@ import ScrollReveal from "scrollreveal";
 import { useNavigate } from "react-router-dom";
 import userApi from "../utils/userApi";
 
-import { Autocomplete, useLoadScript } from "@react-google-maps/api";
-
-const libraries = ["places"];
-
-// ✅ Move this OUTSIDE Hero (important)
+// ✅ Move this OUTSIDE Hero
 const PlacesInput = ({
-  isLoaded,
   value,
   onChange,
   onSelect,
@@ -27,62 +22,77 @@ const PlacesInput = ({
   inputClassName,
   disabled,
 }) => {
-  const acRef = useRef(null);
+  const [suggestions, setSuggestions] = useState([]);
+  const [show, setShow] = useState(false);
+  const containerRef = useRef(null);
 
-  // fallback if google not loaded
-  if (!isLoaded) {
-    return (
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        disabled={disabled}
-        className={inputClassName}
-        autoComplete="off"
-        required
-      />
-    );
-  }
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setShow(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleFetch = async (query) => {
+    if (!query || query.length < 3) {
+      setSuggestions([]);
+      return;
+    }
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`);
+      const data = await res.json();
+      setSuggestions(data);
+      setShow(true);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      if (show) handleFetch(value);
+    }, 500);
+    return () => clearTimeout(delayDebounceFn);
+  }, [value]);
 
   return (
-    <Autocomplete
-      onLoad={(ac) => {
-        acRef.current = ac;
-      }}
-      onPlaceChanged={() => {
-        const place = acRef.current?.getPlace?.();
-
-        const address =
-          place?.formatted_address ||
-          place?.name ||
-          place?.vicinity ||
-          value ||
-          "";
-
-        const lat = place?.geometry?.location?.lat?.();
-        const lng = place?.geometry?.location?.lng?.();
-
-        // ✅ set text in input
-        onChange(address);
-
-        // ✅ save coords
-        onSelect?.({ address, lat, lng });
-      }}
-      options={{
-        // types: ["geocode"],
-        // componentRestrictions: { country: "in" },
-      }}
-    >
+    <div className="relative" ref={containerRef}>
       <input
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          onChange(e.target.value);
+          setShow(true);
+        }}
+        onFocus={() => {
+          if (value.length >= 3) handleFetch(value);
+        }}
         placeholder={placeholder}
         disabled={disabled}
         className={inputClassName}
         autoComplete="off"
         required
       />
-    </Autocomplete>
+      {show && suggestions.length > 0 && (
+        <ul className="absolute z-50 w-full bg-white border border-slate-200 mt-1 rounded-xl shadow-lg max-h-60 overflow-y-auto overflow-x-hidden left-0 text-left">
+          {suggestions.map((item) => (
+            <li
+              key={item.place_id}
+              className="px-4 py-3 hover:bg-emerald-50 cursor-pointer text-sm text-slate-700 border-b border-slate-100 last:border-0"
+              onClick={() => {
+                onChange(item.display_name);
+                onSelect?.({ address: item.display_name, lat: parseFloat(item.lat), lng: parseFloat(item.lon) });
+                setShow(false);
+              }}
+            >
+              {item.display_name}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 };
 
@@ -108,12 +118,6 @@ const Hero = () => {
   });
   const [statsLoading, setStatsLoading] = useState(true);
   const [searching, setSearching] = useState(false);
-
-  // ✅ Google script loader
-  const { isLoaded } = useLoadScript({
-    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_KEY || "",
-    libraries,
-  });
 
   // ✅ Auto default billing type based on mode
   useEffect(() => {
@@ -371,7 +375,6 @@ const Hero = () => {
                   </label>
 
                   <PlacesInput
-                    isLoaded={isLoaded}
                     value={pickupLocation}
                     onChange={(v) => {
                       setPickupLocation(v);
@@ -392,7 +395,6 @@ const Hero = () => {
                   </label>
 
                   <PlacesInput
-                    isLoaded={isLoaded}
                     value={dropupLocation}
                     onChange={(v) => {
                       setDropupLocation(v);
