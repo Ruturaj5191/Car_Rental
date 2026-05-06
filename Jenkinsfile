@@ -27,7 +27,7 @@ pipeline {
             steps {
                 script {
                     dir('frontend') {
-                        bat "docker build --build-arg VITE_API_URL=http://localhost:5000/api -t %DOCKER_IMAGE_FRONTEND%:latest ."
+                        bat "docker build --build-arg VITE_API_URL=http://localhost:5001/api -t %DOCKER_IMAGE_FRONTEND%:latest ."
                     }
                 }
             }
