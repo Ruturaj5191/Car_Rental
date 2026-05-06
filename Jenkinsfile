@@ -4,6 +4,7 @@ pipeline {
     environment {
         DOCKER_IMAGE_BACKEND = "car-rental-backend"
         DOCKER_IMAGE_FRONTEND = "car-rental-frontend"
+        APP_VERSION = "v${env.BUILD_NUMBER}"
     }
 
     stages {
@@ -17,7 +18,7 @@ pipeline {
             steps {
                 script {
                     dir('backend') {
-                        bat "docker build -t %DOCKER_IMAGE_BACKEND%:latest ."
+                        bat "docker build -t %DOCKER_IMAGE_BACKEND%:%APP_VERSION% -t %DOCKER_IMAGE_BACKEND%:latest ."
                     }
                 }
             }
@@ -27,7 +28,7 @@ pipeline {
             steps {
                 script {
                     dir('frontend') {
-                        bat "docker build --build-arg VITE_API_URL=http://localhost:5001/api -t %DOCKER_IMAGE_FRONTEND%:latest ."
+                        bat "docker build --build-arg VITE_API_URL=http://localhost:5001/api -t %DOCKER_IMAGE_FRONTEND%:%APP_VERSION% -t %DOCKER_IMAGE_FRONTEND%:latest ."
                     }
                 }
             }

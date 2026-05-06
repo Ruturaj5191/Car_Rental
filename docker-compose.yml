@@ -13,6 +13,7 @@ services:
       - db_data:/var/lib/mysql
 
   backend:
+    image: car-rental-backend:${APP_VERSION:-latest}
     build:
       context: ./backend
     ports:
@@ -29,6 +30,7 @@ services:
     restart: always
 
   frontend:
+    image: car-rental-frontend:${APP_VERSION:-latest}
     build:
       context: ./frontend
       args:
